@@ -2,6 +2,10 @@
 
 [Public benchmark](https://frame-lab-gamma.vercel.app/benchmark) · [Documentation index](docs/README.md)
 
+![Frame Lab results overview with strategy summaries and recorded run statistics](docs/images/frame-lab-results.png)
+
+![Frame Lab playback with program output, all eight demo videos in two rows, and per-deck statistics](docs/images/frame-lab-playback.png)
+
 ## How the project evolved
 
 This repository began as **zig-swap**, exploring a compiled time-remapping core and comparing Zig and Rust against shared correctness fixtures. The Zig demo and archived Rust spike remain as historical experiments.
