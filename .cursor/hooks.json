@@ -4,17 +4,17 @@
     "postToolUse": [
       {
         "matcher": "Read|Grep|Glob|Search|Shell",
-        "command": "node \"C:\\Users\\Gordo\\Documents\\Github\\zig-swap\\.cursor\\hooks\\graft-hooks.cjs\" cursor-post-tool"
+        "command": "node \"C:\\Users\\Gordo\\Documents\\Github\\frame-lab\\.cursor\\hooks\\graft-hooks.cjs\" cursor-post-tool"
       }
     ],
     "afterMCPExecution": [
       {
-        "command": "node \"C:\\Users\\Gordo\\Documents\\Github\\zig-swap\\.cursor\\hooks\\graft-hooks.cjs\" cursor-mcp"
+        "command": "node \"C:\\Users\\Gordo\\Documents\\Github\\frame-lab\\.cursor\\hooks\\graft-hooks.cjs\" cursor-mcp"
       }
     ],
     "sessionEnd": [
       {
-        "command": "node \"C:\\Users\\Gordo\\Documents\\Github\\zig-swap\\.cursor\\hooks\\graft-hooks.cjs\" cursor-session-end"
+        "command": "node \"C:\\Users\\Gordo\\Documents\\Github\\frame-lab\\.cursor\\hooks\\graft-hooks.cjs\" cursor-session-end"
       }
     ]
   }
