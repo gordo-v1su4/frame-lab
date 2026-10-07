@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frame-lab",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "benchmark"],
+      "port": 5173,
+      "autoPort": true
+    }
+  ]
+}

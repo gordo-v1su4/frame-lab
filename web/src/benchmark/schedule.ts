@@ -2,8 +2,11 @@ import { createTimeSamplerState, reduceTimeSampler } from './vendor/reducer';
 import {nextGrooveBeat} from './vendor/groove';
 import type { TimeSamplerParams, TimeSamplerTransportSample } from './vendor/types';
 export interface TriggerChannel {name:string;events:{time:number;strength:number;note?:number}[]}
-export interface Grid { triggerChannels?:TriggerChannel[]; beats: number[]; duration: number; bpm: number; onsets?:{time:number;strength:number}[]; variedGroove?:boolean; stems?:{name:string;notes:{time:number;note:number;velocity:number;channel:number}[]}[] }
+export interface Grid { triggerChannels?:TriggerChannel[]; beats: number[]; duration: number; bpm: number; onsets?:{time:number;strength:number}[]; variedGroove?:boolean; groove?:Groove; stems?:{name:string;notes:{time:number;note:number;velocity:number;channel:number}[]}[] }
 export interface Cut { id: number; at: number; source: number; pattern: string; stress: boolean; surprise: boolean; beat: number; triggerTime?:number; speed?:number; rampPeriod?:number; smashBeatSeconds?:number }
+export type Groove='straight'|'swing'|'dotted'|'varied';
+/** Groove feel for the nth trigger: fixed, or rotating straight/swing/dotted when varied. */
+export const grooveFeel=(groove:Groove|undefined,n:number):0|1|2=>groove==='swing'?1:groove==='dotted'?2:groove==='varied'?(n%3) as 0|1|2:0;
 export const patterns = ['midi-stems','cuts-only','audio-dense','audio-stutter4','mixed','straight','forward','backward','quarter','eighth','sixteenth','stutter2','stutter4','stutter8','dotted','swing','surprise','32nd','64th','speed-normal','speed-quarter','speed-third','speed-ramp','speed-smash'] as const;
 export type Pattern = typeof patterns[number];
 export function beatTime(grid: Grid, beat: number): number {
@@ -80,7 +83,7 @@ export function buildAudioSchedule(grid:Grid,durations:number[],seed:number,seco
       // Every fourth accepted onset starts a four-repeat burst. Deck phases differ.
       if(accepted++%(dense?2:4)===deck%(dense?2:4)){
         const step=dense?[1,.5,.25][(accepted+deck)%3]:deck%2?.25:.5;
-        const feel:0|1|2=dense&&grid.variedGroove?(accepted+deck)%3 as 0|1|2:0;
+        const feel:0|1|2=grid.groove&&grid.groove!=='varied'?grooveFeel(grid.groove,0):dense&&grid.variedGroove?(accepted+deck)%3 as 0|1|2:0;
         const repeats=dense?[2,4,8][(accepted+deck)%3]:4;
         // Give the onset at least two 60 Hz display opportunities before repeating.
         let beat=nextGrooveBeat(beatAt(grid,onset.time+1/30),step,feel);
@@ -119,7 +122,7 @@ export function buildMidiSchedule(grid:Grid,durations:number[],seed:number,secon
     const stem=channels[deck%channels.length];
     const step=selected==='quarter'?1:selected==='eighth'?.5:selected==='sixteenth'?.25:stem.name==='synth'?.25:stem.name==='bass'?1:.5;
     const repeats=selected==='stutter2'?2:selected==='stutter8'?8:4;
-    let state=(seed+deck*997)>>>0,blockedUntil=0;
+    let state=(seed+deck*997)>>>0,blockedUntil=0,triggers=0;
     const events:Cut[]=[{id:0,at:0,source:deck*duration/durations.length,pattern:stem.name+'-preroll',stress:false,surprise:false,beat:0}];
     for(const note of stem.events){
       if(note.time>=seconds)break;
@@ -127,14 +130,18 @@ export function buildMidiSchedule(grid:Grid,durations:number[],seed:number,secon
       state=(Math.imul(state,1664525)+1013904223)>>>0;
       const source=Math.floor(state/4294967296*8)*duration/8;
       const startBeat=beatAt(grid,note.time);
-      // Four plays of the same anchor, beginning exactly at the note-on.
-      // Chords and notes inside a burst coalesce so they cannot cancel repeats.
+      const feel=grooveFeel(grid.groove,deck+triggers++);
+      const feelName=feel?'-'+['straight','swing','dotted'][feel]:'';
+      // Four plays of the same anchor, beginning exactly at the note-on; later
+      // repeats land on the groove grid. Chords and notes inside a burst coalesce.
+      let beat=startBeat;
       for(let repeat=0;repeat<repeats;repeat++){
-        const beat=startBeat+repeat*step,at=beatTime(grid,beat);
+        const at=beatTime(grid,beat);
         if(at>=seconds)break;
-        events.push({id:events.length,at,source,pattern:stem.name+'-stutter'+repeats+'-'+(step===1?'quarter':step===.5?'eighth':'sixteenth')+(note.note===undefined?'':'-note'+note.note),stress:false,surprise:false,beat,triggerTime:note.time});
+        events.push({id:events.length,at,source,pattern:stem.name+'-stutter'+repeats+'-'+(step===1?'quarter':step===.5?'eighth':'sixteenth')+feelName+(note.note===undefined?'':'-note'+note.note),stress:false,surprise:false,beat,triggerTime:note.time});
+        beat=feel?nextGrooveBeat(beat+1e-7,step,feel):beat+step;
       }
-      blockedUntil=beatTime(grid,startBeat+repeats*step);
+      blockedUntil=beatTime(grid,beat);
     }
     return events;
   });

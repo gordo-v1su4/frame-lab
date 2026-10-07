@@ -1,10 +1,10 @@
 # Hands-off automation
 
-Linear is the **control plane**. Code lives on GitHub. Agents never use GitHub Issues for zig-swap work.
+Linear is the **control plane**. Code lives on GitHub. Agents never use GitHub Issues for Frame Lab work.
 
 ## Quick start (operator)
 
-1. Open [Zig Swap in Linear](https://linear.app/v1su4/project/zig-swap-6dd41597bb31)
+1. Open [Frame Lab in Linear](https://linear.app/v1su4/project/frame-lab-6dd41597bb31)
 2. Find a ticket labelled **`ready-for-agent`** with no blockers (frontier)
 3. Start a **fresh** Cursor or Codex session: *"Implement Linear issue V1S-NNN"*
 4. Agent runs `/implement`, opens PR, comments brief, marks **Done**

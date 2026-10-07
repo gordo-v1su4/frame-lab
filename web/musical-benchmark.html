@@ -17,7 +17,7 @@
           ><span class="brand-mark">▥</span> FRAME LAB
           <small>EXPERIMENTAL</small></a
         ><a
-          href="https://github.com/gordo-v1su4/zig-swap"
+          href="https://github.com/gordo-v1su4/frame-lab"
           target="_blank"
           rel="noreferrer"
           >Source ↗</a
@@ -43,30 +43,30 @@
         </aside>
       </section>
       <section class="engines" aria-label="Playback strategies">
-        <article>
+        <article data-backend="beatsmaxxer">
           <span>01 / BASELINE</span>
           <h2>HTML video pool</h2>
           <p>
             Prewarmed elements and controlled seeks.
           </p>
         </article>
-        <article>
+        <article data-backend="mediabunny">
           <span>02 / ON DEMAND</span>
           <h2>WebCodecs cache</h2>
           <p>Mediabunny with bounded frame reuse.</p>
         </article>
-        <article>
+        <article data-backend="gpu-bank">
           <span>03 / FULL RESIDENCY</span>
           <h2>GPU texture bank</h2>
           <p>
             Decode first, play from resident textures.
           </p>
         </article>
-        <article>
+        <article data-backend="libmedia">
           <span>04 / CAPABILITY GATE</span>
           <h2>libmedia</h2>
           <p>
-            Experimental - no scored results yet.
+            Experimental capability probe.
           </p>
         </article>
       </section>
@@ -96,9 +96,7 @@
           </div>
         </div>
         <p class="muted">
-          Subtle BEST markers show the best values in this filtered view, not a controlled engine ranking. Reload restores a run setup. Included reference previews and your local runs. Select two rows to
-          compare. These are exploratory results, not a completed head-to-head
-          study.
+          Gray marks the best value per column; the highlighted strategy card and row hold the best result at the highest deck count. Workloads, deck counts and memory budgets can differ, so check conditions before concluding. Select two rows to compare, or Reload a run to repeat it.
         </p>
         <div class="filters">
           <label
@@ -121,6 +119,8 @@
               id="filter-search"
               placeholder="Pattern, seed, browser…"
               type="search" /></label
+          ><label class="check-label"
+            ><input id="filter-history" type="checkbox" /> Show history</label
           ><button id="refresh-results">Refresh</button>
         </div>
         <p id="results-status" role="status">Loading saved runs…</p>
@@ -165,6 +165,7 @@
           <p id="local-media-status" class="note">
             Demo media selected. Local files stay in browser memory.
           </p>
+          <p id="trigger-media" class="note"></p>
           <label id="local-bpm-label" hidden
             >Audio BPM · manual grid<input
               id="local-bpm"
@@ -221,7 +222,10 @@
                 </select></label
               ><label
                 >Trigger source<select id="trigger">
-                  <option value="midi">Redline MIDI (accepted preview)</option>
+                  <option value="midi">MIDI · vocals + synth + bass</option>
+                  <option value="midi-vocals">MIDI · vocals only</option>
+                  <option value="midi-synth">MIDI · synth only</option>
+                  <option value="midi-bass">MIDI · bass only</option>
                   <option value="mix-onsets">Analyzed mix onsets</option>
                   <option value="vocals-onsets">Analyzed vocal onsets</option>
                   <option value="stem-onsets">
@@ -236,6 +240,13 @@
                   <option value="legacy">Earlier pattern / audio tests</option>
                 </select></label
               ><label>Pattern<select id="pattern"></select></label
+              ><label
+                >Groove · repeat timing<select id="groove">
+                  <option value="straight">Straight (even)</option>
+                  <option value="swing">Swing (2:1 triplet)</option>
+                  <option value="dotted">Dotted (1.5× steps)</option>
+                  <option value="varied">Varied · rotate all three</option>
+                </select></label
               ><label id="speed-control" hidden
                 >Speed profile<select id="speed">
                   <option value="speed-normal">Normal · 1×</option>
@@ -280,14 +291,7 @@
                   </option>
                 </select></label
               >
-              <div class="field-pair">
-                <label
-                  >Groove<select id="groove">
-                    <option value="straight">Straight</option>
-                    <option value="varied">Straight / swing / dotted</option>
-                  </select></label
-                ><label>Seed<input id="seed" type="number" value="42" /></label>
-              </div>
+              <label>Seed<input id="seed" type="number" value="42" /></label>
               <p class="note">
                 The frame memory cap applies to application-owned images. GPU
                 driver allocations are additional.
@@ -410,7 +414,7 @@
         </p>
         <p>
           <a
-            href="https://github.com/gordo-v1su4/zig-swap/blob/gordo/v1s-77-78-79-parallel/docs/musical-playback-benchmark.md"
+            href="https://github.com/gordo-v1su4/frame-lab/blob/main/docs/musical-playback-benchmark.md"
             >Detailed methodology & provenance ↗</a
           >
           · <a href="/seek-benchmark">Earlier serial-seek diagnostic ↗</a>

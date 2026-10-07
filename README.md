@@ -17,6 +17,7 @@ A browser playback benchmark for musical cuts, seeks, stutters, and independent 
 - Compare the user's M3 laptop (16 GB unified memory) with the RTX 5090 desktop (128 GB system RAM, 32 GB VRAM). These are user-reported target configurations, not completed comparative measurements. Record the exact model, OS, browser, display and power mode when testing.
 - Add hardware profiles and clearer tabs/filters for comparing runs across machines, similar to established benchmark tools. Keep browser, media, workload and memory conditions visible.
 - Test memory-aware presets and proxy media separately; a large resident-texture bank that fits the desktop may not fit a laptop's shared memory.
+- Benchmark the strategies from the [October 2026 technique scan](docs/multi-video-techniques-2026-10.md): zero-copy external textures, WebCodecs in a render worker, GPU frame rings, mosaic video, short-GOP proxies (Linear V1S-191).
 - Continue browser-video and compiled WebAssembly research using the [evaluation roadmap](docs/evaluation-roadmap.md). Publish repeatable evidence before recommending an integration.
 
 This is planned work; no M3-versus-desktop trial or hardware-normalized score is available yet.
@@ -30,9 +31,20 @@ bun install
 bun run benchmark
 ```
 
-Open **http://localhost:5173/benchmark** in a browser with WebGPU and WebCodecs support. The benchmark command does not build or require Zig or Rust. `bun run dev` still starts the older Zig demo separately. The server binds to localhost.
+Open **http://localhost:5173/benchmark** in a browser with WebGPU and WebCodecs support (set `PORT` to use another port). The benchmark command does not build or require Zig or Rust. `bun run dev` still starts the older Zig demo separately. The server binds to localhost.
 
-Start in **Results** to inspect the saved reference runs. In **Playback lab**, choose a strategy, deck count and workload, then press Play. Audio starts with playback. Start with one deck before increasing capacity. GPU texture residency can require several GiB even for short clips.
+Start in **Results** to inspect the saved reference runs. The strategy cards at the top show each engine's best current result, and the top one is highlighted in gray. In **Playback lab**, choose a strategy, deck count, trigger source and groove, then press Play.
+
+Demo media loads automatically from `prep/fixtures/test-media/benchmark`: 8 Beatsmaxxer clips at 720p and 1080p, the Redline track, its MIDI stems (vocals, synth, bass) and librosa analysis of the mix and the isolated stems. Trigger sources are MIDI for all stems or a single stem, mix/vocal/stem onsets, vocal phrase starts and loudness peaks. Groove sets repeat timing: straight, swing (2:1), dotted (1.5×) or varied.
+
+## Demo recordings
+
+```sh
+bun run benchmark          # terminal 1
+bun run record:demo        # terminal 2; optional name filters, e.g. `bun run record:demo midi swing`
+```
+
+The recorder runs each scenario in headless Chrome on your GPU. The page records only its own tab (video plus soundtrack) and saves a 1920×1080 60 fps MP4 to `captures/`, which is gitignored. Each recording is also a normal saved benchmark run. Any lab control can be set from the URL, for example `/benchmark?capture&backend=gpu-bank&count=8&trigger=midi-vocals&groove=swing`. `capture` frames only the playback stage, and `autoplay` starts the run. Audio starts with playback. Start with one deck before increasing capacity. GPU texture residency can require several GiB even for short clips.
 
 ## Four strategies
 
@@ -72,7 +84,7 @@ This is an experimental playback lab, not a production migration or a universal 
 
 Use **Reload** beside a recorded run to restore its controls in Playback lab, then press Play. This reruns the setup with the current implementation; historical measurements remain unchanged. Included media is available immediately. Local files are never persisted: select the original videos in their original order and the original audio if needed. Playback checks their recorded fingerprints before proceeding. Reset clears the restored-media requirement for a new experiment. Custom audio is analyzed locally when selected.
 
-Subtle **BEST** marks identify the highest on-time rate and lowest cut p95, missed-cut count and preload time among completed, valid, versioned cut runs in the filtered view. They are descriptive extrema, not an overall engine winner: media, deck counts, workloads and memory budgets can differ. Legacy runs, failed probes and ramp runs are excluded from these cut highlights.
+Results show the latest run per setup by default; tick **Show history** for older revisions, legacy runs and capability probes. Gray **BEST** marks identify the highest on-time rate and lowest cut p95, missed-cut count and preload time among completed, valid, versioned cut runs in the filtered view. They are descriptive extrema, not an overall engine winner: media, deck counts, workloads and memory budgets can differ. Legacy runs, failed probes and ramp runs are excluded from these cut highlights.
 
 
 ## Hosted version and deployment

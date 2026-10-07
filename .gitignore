@@ -27,3 +27,6 @@ dist/
 
 # Cursor hook runtime state (per-machine)
 .cursor/hooks/state/
+
+# Demo recordings (scripts/record-demo.ts)
+captures/

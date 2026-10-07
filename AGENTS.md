@@ -44,7 +44,7 @@ no API key, $0).
 
 ### Issue tracker
 
-Specs and tickets live in **Linear** (team V1su4, project [Zig Swap](https://linear.app/v1su4/project/zig-swap-6dd41597bb31)). GitHub is code/PRs only. See `docs/agents/issue-tracker.md`.
+Specs and tickets live in **Linear** (team V1su4, project [Frame Lab](https://linear.app/v1su4/project/frame-lab-6dd41597bb31)). GitHub is code/PRs only. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -72,7 +72,7 @@ Hands-off loop: Linear frontier → `/implement` → PR → Done. See `docs/agen
 
 - Current public app: **Frame Lab**, a TypeScript browser playback-strategy benchmark. Read `CONTEXT.md` and `docs/adr/0009-playback-strategy-benchmark.md`. Stack C/Zig notes below describe the preserved original demo.
 
-- **zig-swap** is the greenfield Stack C build (WebCodecs + WASM remap core + WebGPU); GitHub repo `gordo-v1su4/zig-swap`.
+- **Frame Lab** (repo `gordo-v1su4/frame-lab`, local folder `frame-lab`; formerly zig-swap) began as the greenfield Stack C build (WebCodecs + WASM remap core + WebGPU).
 - **webgpu-research** is the parked lab predecessor — port `timesampler` semantics and Essentia prep from there, not fftron-sync.
 - **beatsmaxxer-pro** is the best-performing finished app today (Stack A); benchmark feel/latency only, not architecture to copy.
 - **video-timeshaper** is the EditEngine / Time Shaper behavior-spec sibling repo.

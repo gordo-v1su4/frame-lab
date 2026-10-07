@@ -5,6 +5,19 @@ export const engineNames: Record<string, string> = {
   libmedia: "libmedia",
 };
 export type SavedRun = Record<string, any>;
+const triggerNames: Record<string, string> = {
+  midi: "MIDI · all stems",
+  "midi-vocals": "MIDI · vocals",
+  "midi-synth": "MIDI · synth",
+  "midi-bass": "MIDI · bass",
+  "mix-onsets": "Mix onsets",
+  "vocals-onsets": "Vocal onsets",
+  "stem-onsets": "Stem onsets",
+  "vocals-activity": "Vocal phrases",
+  "mix-loudness": "Loudness peaks",
+  "local-energy": "Local audio",
+  legacy: "Earlier pattern",
+};
 const finite = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 export function summarizeRun(r: SavedRun) {
@@ -26,6 +39,10 @@ export function summarizeRun(r: SavedRun) {
     backend: r.backend,
     mode: gate ? "gate" : remap ? "remap" : "cuts",
     pattern: r.action ?? r.pattern ?? "Capability probe",
+    trigger: gate
+      ? "—"
+      : (triggerNames[r.signal] ?? (r.pattern === "midi-stems" ? "MIDI · all stems" : r.signal ?? "—")),
+    groove: gate || remap ? "—" : (r.groove ?? "straight"),
     revision: r.schemaVersion ?? "legacy",
     count: r.count ?? null,
     resolution: r.resolution ?? "—",

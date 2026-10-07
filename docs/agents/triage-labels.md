@@ -1,6 +1,6 @@
 # Triage Labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in Linear (team **V1su4**, project **Zig Swap**).
+The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in Linear (team **V1su4**, project **Frame Lab** (formerly Zig Swap)).
 
 | Label in mattpocock/skills | Label in our tracker | Meaning                                  |
 | -------------------------- | -------------------- | ---------------------------------------- |

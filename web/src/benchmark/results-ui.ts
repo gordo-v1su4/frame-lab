@@ -15,6 +15,8 @@ const columns = [
   ["engine", "Engine"],
   ["state", "Run type"],
   ["pattern", "Workload"],
+  ["trigger", "Trigger"],
+  ["groove", "Groove"],
   ["count", "Decks"],
   ["seconds", "Seconds"],
   ["seed", "Seed"],
@@ -25,6 +27,8 @@ const columns = [
   ["preload", "Preload"],
   ["memory", "Frame memory"],
 ] as const;
+type Summary = ReturnType<typeof summarizeRun>;
+const stamp = (r: Summary) => parseInt(r.id, 10) || 0;
 const num = (v: unknown, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
 function display(r: ReturnType<typeof summarizeRun>, key: string): string {
@@ -35,6 +39,8 @@ function display(r: ReturnType<typeof summarizeRun>, key: string): string {
       return r.p95 === null ? "—" : num(r.p95) + " ms";
     case "fps":
       return r.fps ? r.fps.map((v) => num(v)).join("–") : "—";
+    case "seconds":
+      return r.seconds === null ? "—" : num(r.seconds, 0);
     case "preload":
       return r.preload === null ? "—" : num(r.preload / 1000, 2) + " s";
     case "memory":
@@ -49,8 +55,22 @@ function rows() {
   const engine = ($("filter-engine") as HTMLSelectElement).value,
     mode = ($("filter-mode") as HTMLSelectElement).value,
     q = ($("filter-search") as HTMLInputElement).value.toLowerCase();
-  return [...runs, ...imported]
-    .map(summarizeRun)
+  const history = ($("filter-history") as HTMLInputElement).checked;
+  const all = [...runs, ...imported].map(summarizeRun);
+  // Without history, keep only the newest versioned run per setup.
+  const setup = (r: Summary) =>
+    [r.backend, r.mode, r.pattern, r.trigger, r.groove, r.count, r.resolution, r.raw.duration, r.budget].join("|");
+  const newest = new Map<string, Summary>();
+  for (const r of all) {
+    const prior = newest.get(setup(r));
+    if (!prior || stamp(r) > stamp(prior)) newest.set(setup(r), r);
+  }
+  return all
+    .filter(
+      (r) =>
+        history ||
+        (r.mode !== "gate" && r.revision !== "legacy" && r.raw.completed && !r.raw.invalid?.length && newest.get(setup(r)) === r),
+    )
     .filter(
       (r) =>
         (!engine || r.backend === engine) &&
@@ -69,6 +89,41 @@ function rows() {
       );
     });
 }
+/** Capacity is the question: most simultaneous decks first, then on-time rate, then cut p95. */
+const byCapacity = (a: Summary, b: Summary) =>
+  (Number(b.count) || 0) - (Number(a.count) || 0) || b.onTime! - a.onTime! || (a.p95 ?? 1e9) - (b.p95 ?? 1e9);
+/** Fill the strategy cards above the tabs with each engine's best visible cut run. */
+function renderStrategies(eligible: Summary[], topRun: Summary | undefined) {
+  for (const card of document.querySelectorAll<HTMLElement>(".engines article[data-backend]")) {
+    const backend = card.dataset.backend!;
+    const best = eligible
+      .filter((r) => r.backend === backend && r.onTime !== null)
+      .sort(byCapacity)[0];
+    let stat = card.querySelector<HTMLElement>(".engine-stat");
+    if (!stat) {
+      stat = document.createElement("div");
+      stat.className = "engine-stat";
+      card.append(stat);
+    }
+    card.classList.toggle("top", !!best && best === topRun);
+    stat.replaceChildren();
+    stat.classList.toggle("empty", !best);
+    if (!best) {
+      stat.textContent = backend === "libmedia" ? "Not scored" : "No current run";
+      continue;
+    }
+    const big = document.createElement("strong");
+    big.textContent = num(best.onTime) + "%";
+    const detail = document.createElement("span");
+    detail.textContent = `on time at ${best.count} deck${best.count === 1 ? "" : "s"} · p95 ${num(best.p95)} ms · ${best.missed ?? "—"} missed`;
+    stat.append(big, detail);
+    if (best === topRun) {
+      const tag = document.createElement("em");
+      tag.textContent = "TOP";
+      stat.append(tag);
+    }
+  }
+}
 function render() {
   const data = rows();
   const eligible=data.filter(r=>r.raw.completed&&!r.raw.invalid?.length&&r.mode==='cuts'&&r.raw.schemaVersion);
@@ -77,6 +132,8 @@ function render() {
     const values=eligible.map(r=>(r as any)[key]).filter(v=>typeof v==='number'&&Number.isFinite(v));
     if(values.length>1)best.set(key,key==='onTime'?Math.max(...values):Math.min(...values));
   }
+  const topRun=eligible.filter(r=>r.onTime!==null).sort(byCapacity)[0];
+  renderStrategies(eligible,topRun);
 
   $("result-count").textContent = String(runs.length + imported.length);
   const head = $("results-table").querySelector("thead")!,
@@ -111,6 +168,7 @@ function render() {
   for (const r of data) {
     const tr = document.createElement("tr");
     tr.classList.toggle("selected", selected.has(r.id));
+    tr.classList.toggle("top-run", r === topRun);
     const td = document.createElement("td"),
       check = document.createElement("input");
     check.type = "checkbox";
@@ -133,7 +191,7 @@ function render() {
       const cell = document.createElement("td");
       cell.textContent = display(r, key);
       if(eligible.includes(r)&&best.has(key)&&(r as any)[key]===best.get(key)){
-        cell.classList.add('best-metric');cell.title='Best recorded value in this filtered view. Workloads and budgets may differ; this is not an engine ranking.';
+        cell.classList.add('best-metric');cell.title='Best recorded value in this view. Workloads and budgets may differ.';
         const badge=document.createElement('span');badge.className='best-label';badge.textContent='BEST';cell.append(badge);
       }
 
@@ -151,7 +209,7 @@ function render() {
     }
     const raw = document.createElement("td");
     if(r.raw.kind==='musical-run'){
-      const reload=document.createElement('button');reload.textContent='Reload';reload.className='reload-run';reload.title='Load this run�s settings in Playback lab';
+      const reload=document.createElement('button');reload.textContent='Reload';reload.className='reload-run';reload.title="Load this run's settings in Playback lab";
       reload.onclick=()=>window.dispatchEvent(new CustomEvent('benchmark-reload',{detail:r.raw}));raw.append(reload);
     }
 
@@ -167,7 +225,7 @@ function render() {
   if (!data.length) {
     const tr = document.createElement("tr"),
       td = document.createElement("td");
-    td.colSpan = 14;
+    td.colSpan = 16;
     td.textContent =
       "No matching runs. Change the filters or run a test in Playback lab.";
     tr.append(td);
@@ -220,7 +278,7 @@ async function refresh() {
     if (!response.ok) throw Error("Could not load saved runs");
     runs = [...await response.json(),...(hosted?await browserResults():[])];
     $("results-status").textContent =
-      `${runs.length} saved runs loaded. Results are never automatically ranked as a winner.`;
+      `${runs.length} saved runs. Showing the latest run per setup; tick Show history for older revisions, legacy runs and probes.`;
     render();
   } catch (e) {
     $("results-status").textContent = String(e);
@@ -230,13 +288,14 @@ async function refresh() {
 for (const view of ["results", "lab", "method"])
   $("tab-" + view).onclick = () => {
     if (view !== "lab") window.dispatchEvent(new Event("benchmark-leave-lab"));
+    document.body.classList.toggle("lab-view", view === "lab");
     for (const v of ["results", "lab", "method"]) {
       $(v + "-panel").hidden = v !== view;
       $("tab-" + v).setAttribute("aria-pressed", String(v === view));
     }
     if (view === "results") void refresh();
   };
-for (const id of ["filter-engine", "filter-mode", "filter-search"])
+for (const id of ["filter-engine", "filter-mode", "filter-search", "filter-history"])
   $(id).addEventListener("input", render);
 $("refresh-results").onclick = () => void refresh();
 $("print-results").onclick = () => window.print();

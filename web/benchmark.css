@@ -1054,3 +1054,43 @@ label { gap:5px; }
 input[type=range],.transport input[type=range] { min-height:0; padding:0; }
 input[type=checkbox] { min-height:0; padding:0; }
 @media(max-width:680px) { .engines { grid-template-columns:1fr; } .engines p { white-space:normal; } }
+
+/* Strategy cards double as a live leaderboard; the top strategy is lifted in gray. */
+.engines article { position:relative; }
+.engines article.top { background:#262626; box-shadow:inset 0 2px #d4d4d4; }
+.engine-stat { display:flex; align-items:baseline; gap:6px; margin-top:8px; font-size:10px; color:#a3a3a3; flex-wrap:wrap; }
+.engine-stat strong { font-size:15px; font-weight:600; color:#f5f5f5; font-variant-numeric:tabular-nums; }
+.engine-stat em { margin-left:auto; font:600 8px ui-monospace,monospace; letter-spacing:1px; font-style:normal; color:#0a0a0a; background:#d4d4d4; padding:2px 5px; }
+.engine-stat.empty { color:#737373; }
+#results-table tbody tr.top-run { background:#1f1f1f; }
+#results-table tbody tr.top-run td:nth-child(2) { box-shadow:inset 2px 0 #d4d4d4; }
+#results-table td.best-metric { background:#2e2e2e; }
+.check-label { flex-direction:row !important; align-items:center; gap:6px; min-width:0 !important; align-self:flex-end; white-space:nowrap; padding-bottom:5px; }
+/* Playback lab: collapse the intro so the lab owns the screen. */
+body.lab-view .intro, body.lab-view .engines { display:none; }
+
+/* Capture mode (?capture): only the playback stage, framed for screen recording. */
+body.capture { overflow:hidden; background:#000; }
+body.capture .shell { max-width:none; padding:0; margin:0; }
+body.capture .masthead, body.capture .intro, body.capture .engines, body.capture .tabs,
+body.capture #lab-panel > .section-heading, body.capture .media-strip, body.capture .settings,
+body.capture .transport, body.capture #status, body.capture #decks, body.capture .run-actions,
+body.capture .stage > details, body.capture .stage > p, body.capture footer { display:none !important; }
+body.capture #lab-panel, body.capture .lab-layout { display:block; padding:0; margin:0; border:0; background:#000; }
+body.capture .stage { height:100vh; display:grid; grid-template-rows:auto auto 1fr auto; background:#000; }
+body.capture #capture-title { display:flex; justify-content:space-between; align-items:baseline; padding:14px 24px 8px; font:600 13px/1 Inter Variable, system-ui, sans-serif; letter-spacing:.14em; color:#f5f5f5; }
+body.capture #capture-title span { font-weight:400; letter-spacing:.04em; color:#a3a3a3; }
+body.capture .beat-strip { background:#000; color:#a3a3a3; padding:0 24px 10px; min-height:0; }
+body.capture #speed-readout { background:#000; padding:0 24px 8px; }
+body.capture #screen { align-self:center; justify-self:center; width:auto; height:auto; max-width:100vw; max-height:100%; aspect-ratio:32/21; min-height:0; }
+body.capture #live { border:0 !important; background:#000; color:#737373; font-size:10px; line-height:1.6; padding:8px 24px 12px; margin:0; max-height:64px; overflow:hidden; }
+#capture-title { display:none; }
+
+/* Range sliders: thin 2px track, slim outlined handle. */
+input[type="range"], .transport input[type="range"] { -webkit-appearance:none; appearance:none; height:2px !important; min-height:0 !important; padding:0; border:0; background:#404040 !important; cursor:pointer; }
+input[type="range"]::-webkit-slider-thumb, .transport input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:6px !important; height:16px !important; background:#171717 !important; border:1px solid #d4d4d4 !important; border-radius:1px !important; box-shadow:none; }
+input[type="range"]::-moz-range-thumb { width:4px !important; height:14px !important; background:#171717 !important; border:1px solid #d4d4d4 !important; border-radius:1px !important; }
+input[type="range"]:hover::-webkit-slider-thumb, input[type="range"]:focus-visible::-webkit-slider-thumb { border-color:#f5f5f5 !important; background:#262626 !important; }
+body.capture #screen { height:calc(100vh - 128px); max-height:none; width:auto; }
+
+.filters label.check-label { display:flex !important; flex-direction:row !important; align-items:center; gap:6px; }

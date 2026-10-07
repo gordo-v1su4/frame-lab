@@ -1,9 +1,10 @@
 {
-  "name": "zig-swap",
+  "name": "frame-lab",
   "private": true,
   "type": "module",
   "scripts": {
     "benchmark": "bun run web/dev-server.ts --benchmark",
+    "record:demo": "bun run scripts/record-demo.ts",
     "dev": "bun run web/dev-server.ts",
     "build:wasm": "bun run scripts/build-wasm.mjs",
     "fixtures:generate": "bun run core/fixtures/generate-timesampler-fixtures.mjs",

@@ -1,21 +1,21 @@
 # Issue tracker: Linear
 
-Specs, tickets, and triage for **zig-swap** live in **Linear** (team **V1su4**), project **[Zig Swap](https://linear.app/v1su4/project/zig-swap-6dd41597bb31)**.
+Specs, tickets, and triage for **Frame Lab** live in **Linear** (team **V1su4**), project **[Frame Lab](https://linear.app/v1su4/project/frame-lab-6dd41597bb31)**.
 
-GitHub (`gordo-v1su4/zig-swap`) is for **code and PRs only** — not the issue tracker.
+GitHub (`gordo-v1su4/frame-lab`) is for **code and PRs only** — not the issue tracker.
 
 ## Access
 
 - **Workspace:** [linear.app/v1su4](https://linear.app/v1su4)
 - **Team:** V1su4 (issue prefix `V1S-`)
-- **Project:** Zig Swap
+- **Project:** Frame Lab (formerly Zig Swap)
 - **Agent tooling:** Linear MCP (`plugin-linear-linear`) — authenticated in Cursor
 
 ## Conventions
 
-- **Create an issue:** `save_issue` with `team: "V1su4"`, `project: "Zig Swap"`, `title`, `description` (Markdown).
+- **Create an issue:** `save_issue` with `team: "V1su4"`, `project: "Frame Lab"`, `title`, `description` (Markdown).
 - **Read an issue:** `get_issue` with id or identifier (e.g. `V1S-123`).
-- **List issues:** `list_issues` with `team: "V1su4"`, `project: "Zig Swap"`, optional `label: "ready-for-agent"`.
+- **List issues:** `list_issues` with `team: "V1su4"`, `project: "Frame Lab"`, optional `label: "ready-for-agent"`.
 - **Comment:** `save_comment` on the issue id.
 - **Apply labels:** `save_issue` with `addLabels: ["ready-for-agent"]` (or `labels` to replace full set).
 - **Close / state:** `save_issue` with `state: "Done"` or `state: "Canceled"`.
@@ -24,7 +24,7 @@ GitHub (`gordo-v1su4/zig-swap`) is for **code and PRs only** — not the issue t
 
 ## When a skill says "publish to the issue tracker"
 
-Create a Linear issue in project **Zig Swap** via `save_issue`.
+Create a Linear issue in project **Frame Lab** (formerly Zig Swap) via `save_issue`.
 
 For specs from `/to-spec`: apply label **`ready-for-agent`**.
 
@@ -53,7 +53,7 @@ Used by `/wayfinder`. The **map** is a parent issue; **child tickets** are sub-i
 
 ## Pull requests
 
-PRs stay on GitHub. Link PRs to Linear issues via `links` or Linear's GitHub integration if enabled. External PRs are **not** a triage surface for zig-swap.
+PRs stay on GitHub. Link PRs to Linear issues via `links` or Linear's GitHub integration if enabled. External PRs are **not** a triage surface for Frame Lab.
 
 ## Hands-off agent loop
 

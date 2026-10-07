@@ -238,6 +238,13 @@ async function init() {
     "/fixtures/test-media/benchmark/interpolation-manifest.json",
   );
   if (interpolation.ok) interpolated = await interpolation.json();
+  const notes = midiEvents.stems!.map((s) => `${s.name} ${s.notes.length}`).join(", ");
+  const analyzed = Object.entries(redlineAnalysis.features)
+    .map(([name, f]) => `${name} ${f.onsets.length}`)
+    .join(", ");
+  el("trigger-media").textContent =
+    `Trigger data · MIDI notes: ${notes} · Analyzed onsets (librosa, isolated stems + mix): ${analyzed} · plus vocal phrase starts and loudness peaks.`;
+  mediaStatus();
   status.textContent =
     "Ready. Play starts audible music and independent musical patterns.";
 }
@@ -320,6 +327,9 @@ function startAudio() {
   audio.connect(gain);
   anchor = context.currentTime + 0.05;
   audio.start(anchor, offset % buffer.duration);
+  captureState.audioStartedAt = Date.now() + 50;
+  captureState.audioOffset = offset % buffer.duration;
+  captureState.audioUrl = bufferUrl;
   playing = true;
 }
 function stopAudio() {
@@ -428,10 +438,12 @@ async function begin() {
         : originalGrid;
     if (usesRedline()) {
       const signal = select("trigger").value;
-      if (signal === "midi" || signal === "legacy")
+      if (signal.startsWith("midi") || signal === "legacy")
         baseGrid = {
           ...midiEvents,
-          triggerChannels: midiEvents.stems!.map((stem) => ({
+          triggerChannels: midiEvents.stems!
+            .filter((stem) => !signal.startsWith("midi-") || signal === "midi-" + stem.name)
+            .map((stem) => ({
             name: stem.name,
             events: stem.notes.map((n) => ({
               time: n.time,
@@ -471,6 +483,7 @@ async function begin() {
     grid = extendedGrid(end);
     const seed = Number(el<HTMLInputElement>("seed").value) >>> 0;
     grid.variedGroove = select("groove").value === "varied";
+    grid.groove = select("groove").value as Grid["groove"];
     programTimes = audioDriven
       ? strongOnsets(grid, dense).map((o) => o.time)
       : grid.beats;
@@ -676,9 +689,9 @@ async function begin() {
     if (usesRedline()) {
       settings.audioHash = midiEvents.sourceSha256;
       settings.gridHash =
-        select("trigger").value === "midi" ? midiHash : redlineHash;
+        select("trigger").value.startsWith("midi") ? midiHash : redlineHash;
       settings.gridProvenance =
-        select("trigger").value === "midi"
+        select("trigger").value.startsWith("midi")
           ? midiEvents.analysis
           : redlineAnalysis.analysis;
       settings.triggerSource = select("trigger").selectedOptions[0].textContent;
@@ -939,6 +952,7 @@ async function finish() {
     "Run saved. Results include missed cuts; no automatic winner declared.";
   finishRun?.();
   finishRun = null;
+  captureState.finished = true;
 }
 play.onclick = () => void begin();
 pause.onclick = () => {
@@ -1019,14 +1033,15 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => {
   void cleanup();
 });
-init().catch((e) => {
+const ready = init().catch((e) => {
   status.textContent = String(e);
   play.disabled = true;
 });
 
 function mediaStatus() {
-  el("local-media-status").textContent =
-    `${localClips.length ? localClips.length + " local videos" : "Included videos"} · ${localAudio ? "local audio" : "Redline audio"}. Media stays in this page session; never uploaded.`;
+  el("local-media-status").textContent = localClips.length || localAudio
+    ? `${localClips.length ? localClips.length + " local videos" : "Demo videos"} · ${localAudio ? "local audio" : "Redline audio"}. Media stays in this page session; never uploaded.`
+    : "Demo media ready: 8 Beatsmaxxer clips (720p and 1080p) with the Redline track, MIDI and Essentia analysis, served from prep/fixtures/test-media/benchmark. Choose files to test your own.";
   el("local-bpm-label").hidden = !localAudio;
   select("trigger").disabled = !!localAudio;
 }
@@ -1143,3 +1158,112 @@ window.addEventListener('benchmark-reload', async event => {
   restoredRun=report;modeControls();mediaStatus();el<HTMLButtonElement>('tab-lab').click();play.disabled=false;pause.disabled=true;
   status.textContent='Run settings restored. '+(custom||report.signal==='local-energy'?'Reselect matching local media if needed; hashes are checked before playback. ':'Included media is available. ')+ 'Press Play to rerun with the current engine; historical measurements are unchanged.';
 });
+
+/**
+ * Capture mode for demo recordings and scripted runs:
+ * /benchmark?capture&autoplay&backend=gpu-bank&count=8&trigger=midi&duration=30
+ * Any control id can be passed as a query parameter. `capture` frames only the stage.
+ */
+const captureState: {
+  audioStartedAt?: number;
+  audioOffset?: number;
+  audioUrl?: string;
+  finished?: boolean;
+  saved?: boolean;
+  error?: string;
+} = ((window as any).frameLab = {});
+
+/** Record this tab (video + tab audio) for the length of one run, then upload it to the local server. */
+async function recordRun(name: string) {
+  const stream = await navigator.mediaDevices.getDisplayMedia({
+    video: { frameRate: 60, width: 1920, height: 1080 },
+    audio: { suppressLocalAudioPlayback: true } as MediaTrackConstraints,
+    preferCurrentTab: true,
+    selfBrowserSurface: "include",
+  } as DisplayMediaStreamOptions);
+  // Never record anything but this tab (a screen or window could expose other apps).
+  const surface = (stream.getVideoTracks()[0]?.getSettings() as { displaySurface?: string }).displaySurface;
+  if (surface !== "browser") {
+    stream.getTracks().forEach((t) => t.stop());
+    throw new Error(`expected this tab, got ${surface ?? "unknown"} surface`);
+  }
+  const mime = ["video/mp4;codecs=avc1.640033,mp4a.40.2", "video/webm;codecs=vp9,opus"].find((t) =>
+    MediaRecorder.isTypeSupported(t),
+  )!;
+  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16e6, audioBitsPerSecond: 256e3 });
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  recorder.start(1000);
+  await new Promise<void>((resolve) => {
+    const check = setInterval(() => {
+      if (captureState.finished || captureState.error) {
+        clearInterval(check);
+        setTimeout(resolve, 1200);
+      }
+    }, 100);
+  });
+  await new Promise<void>((resolve) => {
+    recorder.onstop = () => resolve();
+    recorder.stop();
+  });
+  stream.getTracks().forEach((t) => t.stop());
+  const extension = mime.startsWith("video/mp4") ? "mp4" : "webm";
+  await fetch(`/captures/${name}.${extension}`, { method: "POST", body: new Blob(chunks, { type: mime }) });
+  captureState.saved = true;
+}
+{
+  const params = new URLSearchParams(location.search);
+  if (params.has("capture")) document.body.classList.add("capture");
+  if (params.size) {
+    void ready.then(() => {
+      for (const id of ["mode", "backend", "count", "duration", "resolution", "budget", "trigger", "pattern", "speed", "view", "groove", "interpolation", "seed", "volume"]) {
+        const value = params.get(id);
+        if (value === null) continue;
+        const control = document.getElementById(id) as HTMLSelectElement | HTMLInputElement | null;
+        if (!control) continue;
+        if (control instanceof HTMLSelectElement && ![...control.options].some((o) => o.value === value))
+          control.add(new Option(value, value));
+        control.value = value;
+        if (id === "mode") modeControls();
+        if (id === "volume" && gain) gain.gain.value = Number(value);
+      }
+      if (params.has("capture") || params.has("lab")) el<HTMLButtonElement>("tab-lab").click();
+      if (params.has("capture")) {
+        const label = (id: string) => select(id).selectedOptions[0]?.textContent?.trim() ?? "";
+        const title = document.createElement("div");
+        title.id = "capture-title";
+        const detail = document.createElement("span");
+        detail.textContent = [
+          label("backend"),
+          `${select("count").value} decks · ${select("resolution").value}p`,
+          ...(isRemap() ? [label("speed")] : [label("trigger"), label("groove")]),
+        ].join("  ·  ");
+        title.append("FRAME LAB", detail);
+        el("beat").before(title);
+      }
+      // Scripted recorders read progress from the page title (no CDP client needed).
+      setInterval(() => {
+        document.title = captureState.error
+          ? "frame-lab:error " + captureState.error.slice(0, 160)
+          : captureState.saved
+            ? "frame-lab:saved"
+            : captureState.finished
+            ? "frame-lab:done"
+            : captureState.audioStartedAt
+              ? "frame-lab:playing"
+              : "frame-lab:loading";
+      }, 100);
+      if (params.has("autoplay")) {
+        const observer = new MutationObserver(() => {
+          if (/^Error|failed|requires|Choose|Select/i.test(status.textContent ?? "")) captureState.error = status.textContent!;
+        });
+        observer.observe(status, { childList: true, characterData: true, subtree: true });
+        const record = params.get("record");
+        if (record)
+          void recordRun(record).catch((e) => (captureState.error = "Recording failed: " + e));
+        // Let the recorder spin up so the clip opens on the preload, not mid-run.
+        setTimeout(() => void begin(), record ? 1500 : 0);
+      }
+    });
+  }
+}

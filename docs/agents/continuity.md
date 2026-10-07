@@ -55,7 +55,7 @@ Examples: `bun install`, `bun run dev`, `bunx vitest`, `uv run python prep/analy
 
 ## Issue tracker
 
-**Linear** — team **V1su4**, project **[Zig Swap](https://linear.app/v1su4/project/zig-swap-6dd41597bb31)**. Use Linear MCP in Cursor for `/to-spec`, `/to-tickets`, `/triage`, `/implement`. GitHub repo is for code and PRs only.
+**Linear** — team **V1su4**, project **[Frame Lab](https://linear.app/v1su4/project/frame-lab-6dd41597bb31)**. Use Linear MCP in Cursor for `/to-spec`, `/to-tickets`, `/triage`, `/implement`. GitHub repo is for code and PRs only.
 
 ## Domain docs
 

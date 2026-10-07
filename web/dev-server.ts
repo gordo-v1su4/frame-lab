@@ -104,6 +104,7 @@ async function fixtureResponse(
 
 const server = Bun.serve({
   hostname: "127.0.0.1",
+  maxRequestBodySize: 1024 * 1024 * 1024,
   port,
   routes: {
     "/": standalone ? musical : index,
@@ -167,6 +168,18 @@ const server = Bun.serve({
       mkdirSync(directory, { recursive: true });
       const name = `${Date.now()}-${crypto.randomUUID()}.json`;
       writeFileSync(join(directory, name), body);
+      return Response.json({ saved: name });
+    }
+    // Demo recordings from ?record=<name> (scripts/record-demo.ts). Local server only.
+    if (url.pathname.startsWith("/captures/") && req.method === "POST") {
+      if (req.headers.get("origin") !== url.origin)
+        return new Response("Same-origin only", { status: 403 });
+      const name = url.pathname.slice("/captures/".length);
+      if (!/^[\w-]+\.(webm|mp4)$/.test(name))
+        return new Response("Invalid filename", { status: 400 });
+      const directory = join(repoRoot, "captures");
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(join(directory, name), new Uint8Array(await req.arrayBuffer()));
       return Response.json({ saved: name });
     }
     if (url.pathname.startsWith("/libmedia/")) {
