@@ -1,0 +1,52 @@
+/* All benchmark tabs share the Results page's header and content boundaries. */
+body:not(.capture).lab-view { overflow: auto; }
+body:not(.capture).lab-view .shell {
+  display: block;
+  height: auto;
+  max-width: 1580px;
+  padding: 0 36px;
+}
+body:not(.capture).lab-view .intro { display: grid !important; }
+body:not(.capture).lab-view .engines { display: grid !important; }
+body:not(.capture).lab-view footer { display: flex !important; }
+body:not(.capture).lab-view .tabs { margin-bottom: 24px; }
+#method-panel { max-width: none; width: 100%; }
+body:not(.capture).lab-view #lab-panel:not([hidden]) {
+  display: block;
+  padding-bottom: 0;
+}
+body:not(.capture).lab-view .lab-layout {
+  grid-template-columns: 240px minmax(0, 1fr);
+  height: auto;
+  align-items: start;
+}
+body:not(.capture).lab-view .lab-layout:has(.inspector) {
+  grid-template-columns: 240px minmax(0, 1fr) 240px;
+}
+body:not(.capture).lab-view.inspector-closed .lab-layout {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+body:not(.capture).lab-view .stage {
+  grid-template-rows: auto auto auto auto auto;
+}
+body:not(.capture).lab-view #screen {
+  width: 100%;
+  height: auto;
+  max-height: none;
+}
+@media (max-width: 1100px) {
+  body:not(.capture).lab-view .lab-layout,
+  body:not(.capture).lab-view .lab-layout:has(.inspector),
+  body:not(.capture).lab-view.inspector-closed .lab-layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+}
+@media (max-width: 680px) {
+  body:not(.capture).lab-view .shell { padding: 0 16px; }
+  body:not(.capture).lab-view .intro { grid-template-columns: 1fr; }
+  body:not(.capture).lab-view .lab-layout,
+  body:not(.capture).lab-view .lab-layout:has(.inspector),
+  body:not(.capture).lab-view.inspector-closed .lab-layout {
+    grid-template-columns: 1fr;
+  }
+}
