@@ -31,7 +31,7 @@ bun install
 bun run benchmark
 ```
 
-Open **http://localhost:5173/benchmark** in a browser with WebGPU and WebCodecs support (set `PORT` to use another port). The benchmark command does not build or require Zig or Rust. `bun run dev` still starts the older Zig demo separately. The server binds to localhost.
+Open the URL it prints (normally **http://localhost:5173/benchmark**; if another dev server holds 5173 it moves to the next free port) in a browser with WebGPU and WebCodecs support. The benchmark command does not build or require Zig or Rust. `bun run dev` still starts the older Zig demo separately. The server binds to localhost.
 
 Start in **Results** to inspect the saved reference runs. The strategy cards at the top show each engine's best current result, and the top one is highlighted in gray. In **Playback lab**, choose a strategy, deck count, trigger source and groove, then press Play.
 

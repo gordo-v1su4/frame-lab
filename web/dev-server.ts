@@ -102,7 +102,7 @@ async function fixtureResponse(
   return new Response(file, { headers });
 }
 
-const server = Bun.serve({
+const serve = (port: number) => Bun.serve({
   hostname: "127.0.0.1",
   maxRequestBodySize: 1024 * 1024 * 1024,
   port,
@@ -206,4 +206,15 @@ const server = Bun.serve({
   },
 });
 
-console.log(`${standalone ? "Frame Lab" : "Zig Swap web shell"}: http://localhost:${server.port}`);
+// Another dev server often holds 5173; take the next free port unless PORT was set explicitly.
+let server!: ReturnType<typeof serve>;
+for (let candidate = port; ; candidate++) {
+  try {
+    server = serve(candidate);
+    break;
+  } catch (error) {
+    if (process.env.PORT || candidate >= port + 20) throw error;
+  }
+}
+const url = `http://localhost:${server.port}${standalone ? "/benchmark" : ""}`;
+console.log(`${standalone ? "Frame Lab" : "Zig Swap web shell"}: ${url}${server.port !== port ? ` (port ${port} was busy)` : ""}`);
