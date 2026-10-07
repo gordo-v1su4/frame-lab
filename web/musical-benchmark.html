@@ -181,6 +181,13 @@
               <span class="eyebrow">02 / CONFIGURATION</span>
               <h2>Set up a run</h2>
             </div>
+            <div class="preset-bar">
+              <select id="preset" aria-label="Saved presets" title="Saved presets: load a saved set of run settings">
+                <option value="">Presets…</option>
+              </select>
+              <button id="preset-save" type="button" title="Save the current settings as a named preset (stored in this browser)">Save</button>
+              <button id="preset-delete" type="button" title="Delete the selected preset">Delete</button>
+            </div>
             <fieldset>
               <legend>Playback strategy</legend>
               <label
@@ -234,6 +241,10 @@
                   <option value="vocals-activity">
                     Analyzed vocal phrase starts
                   </option>
+                  <option value="drums-onsets">Analyzed drum onsets</option>
+                  <option value="fft-bands">FFT bands · low / mid / high</option>
+                  <option value="fft-low">FFT low band (&lt;150 Hz)</option>
+                  <option value="fft-high">FFT high band (&gt;2 kHz)</option>
                   <option value="mix-loudness">
                     Analyzed RMS loudness peaks
                   </option>
@@ -247,6 +258,14 @@
                   <option value="dotted">Dotted (1.5× steps)</option>
                   <option value="varied">Varied · rotate all three</option>
                 </select></label
+              ><label id="repeats-control"
+                >Repeats<select id="repeats">
+                  <option value="fixed">Fixed (pattern count)</option>
+                  <option value="dynamic">By energy · hit / 2 / 3 / 4 / ratchet</option>
+                </select></label
+              ><label id="density-control"
+                >Density<input id="density" type="range" min="10" max="100" step="5" value="100"
+              /></label
               ><label id="speed-control" hidden
                 >Speed profile<select id="speed">
                   <option value="speed-normal">Normal · 1×</option>

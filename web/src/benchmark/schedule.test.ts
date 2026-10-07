@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { buildSchedule, targetAt, beatTime } from './schedule';
+import { buildSchedule, targetAt, beatTime, programTimeline } from './schedule';
 const grid = { beats: Array.from({ length: 301 }, (_, i) => i * 0.5), duration: 150, bpm: 120 };
 test('four stutters repeat the same source window on eighth notes without slowing the clock', () => {
   const events = buildSchedule(grid, [20], 42, 4, 'stutter4')[0];
@@ -89,4 +89,29 @@ test('swing and dotted repeats never schedule a cut shorter than a display frame
     const cuts=buildSchedule({...grid,groove,triggerChannels:[{name:'synth',events}]},[20],42,20,'midi-stems')[0];
     for(let i=1;i<cuts.length;i++)expect(cuts[i].at-cuts[i-1].at).toBeGreaterThanOrEqual(1/30-1e-9);
   }
+});
+
+test('density keeps the loudest triggers, dynamic repeats scale with energy, and low density rests',()=>{
+  const ev=(time:number,strength:number)=>({time,strength});
+  const base={beats:Array.from({length:200},(_,i)=>i*.5),duration:100,bpm:120};
+  // Strengths .05 .. 1.0 spaced four beats apart so bursts never overlap.
+  const events=Array.from({length:20},(_,i)=>ev(i*2,(i+1)/20));
+  const full=buildSchedule({...base,triggerChannels:[{name:'vocals',events}],repeatStyle:'dynamic'},[20],1,50,'midi-stems')[0];
+  const shapes=[...new Set(full.slice(1).map(e=>e.pattern.split('-')[1]))];
+  expect(shapes).toEqual(['hit','double','triple','quad','ratchet']);
+  const hits=full.filter(e=>e.triggerTime===0);
+  expect(hits.length).toBe(1);
+  const triple=full.filter(e=>e.pattern.includes('triple')&&e.triggerTime===full.find(f=>f.pattern.includes('triple'))!.triggerTime);
+  expect(triple.map(e=>Number((e.at-triple[0].at).toFixed(4)))).toEqual([0,1/6,1/3].map(x=>Number(x.toFixed(4))));
+  const half=buildSchedule({...base,triggerChannels:[{name:'vocals',events}],density:.5},[20],1,50,'midi-stems')[0];
+  expect(new Set(half.slice(1).map(e=>e.triggerTime))).toEqual(new Set([20,22,24,26,28,30,32,34,36,38]));
+});
+
+test('program view waits for the on-screen burst to finish and follows the deck that triggered',()=>{
+  const g={beats:Array.from({length:40},(_,i)=>i*.5),duration:20,bpm:120};
+  const burst=(t:number,n:number,step=.25)=>Array.from({length:n},(_,k)=>({id:0,at:t+k*step,source:1,pattern:'x',stress:false,surprise:false,beat:0,triggerTime:t}));
+  const pre={id:0,at:0,source:0,pattern:'preroll',stress:false,surprise:false,beat:0};
+  // Deck 0 stutters 1.0-2.0 s; deck 1 triggers mid-stutter at 1.5 s (skipped) and again at 2.0 s.
+  const decks=[[pre,...burst(1,4)],[pre,...burst(1.5,2),...burst(2,2)]];
+  expect(programTimeline(g,decks)).toEqual([{at:1,deck:0},{at:2,deck:1}]);
 });

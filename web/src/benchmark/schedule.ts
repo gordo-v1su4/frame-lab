@@ -2,9 +2,42 @@ import { createTimeSamplerState, reduceTimeSampler } from './vendor/reducer';
 import {nextGrooveBeat} from './vendor/groove';
 import type { TimeSamplerParams, TimeSamplerTransportSample } from './vendor/types';
 export interface TriggerChannel {name:string;events:{time:number;strength:number;note?:number}[]}
-export interface Grid { triggerChannels?:TriggerChannel[]; beats: number[]; duration: number; bpm: number; onsets?:{time:number;strength:number}[]; variedGroove?:boolean; groove?:Groove; stems?:{name:string;notes:{time:number;note:number;velocity:number;channel:number}[]}[] }
+export interface Grid { triggerChannels?:TriggerChannel[]; beats: number[]; duration: number; bpm: number; onsets?:{time:number;strength:number}[]; variedGroove?:boolean; groove?:Groove; density?:number; repeatStyle?:RepeatStyle; stems?:{name:string;notes:{time:number;note:number;velocity:number;channel:number}[]}[] }
 export interface Cut { id: number; at: number; source: number; pattern: string; stress: boolean; surprise: boolean; beat: number; triggerTime?:number; speed?:number; rampPeriod?:number; smashBeatSeconds?:number }
 export type Groove='straight'|'swing'|'dotted'|'varied';
+/** fixed: every trigger plays the pattern's repeat count. dynamic: repeat shape follows trigger energy. */
+export type RepeatStyle='fixed'|'dynamic';
+/** Lowest strength kept when only the loudest `density` share (0..1) of triggers may cut. */
+export function densityFloor(strengths:number[],density=1){
+  if(!(density<1)||!strengths.length)return -Infinity;
+  const sorted=[...strengths].sort((a,b)=>a-b);
+  return sorted[Math.min(sorted.length-1,Math.floor((1-Math.max(0,density))*sorted.length))];
+}
+/** Share of strengths strictly below `value` (0 = quietest, approaching 1 = loudest). */
+export function energyRank(sorted:number[],value:number){
+  let lo=0,hi=sorted.length;
+  while(lo<hi){const mid=(lo+hi)>>1;if(sorted[mid]<value)lo=mid+1;else hi=mid;}
+  return sorted.length?lo/sorted.length:0;
+}
+/**
+ * Repeat shape for a trigger by energy rank, in beats from the trigger. Quiet
+ * triggers are single hits that let the clip breathe; loud ones double,
+ * triplet-stutter, quad, then ratchet (accelerating 1, 1/2, 1/2, 1/4, 1/4 steps).
+ */
+export function burstShape(rank:number,step:number):{name:string;beats:number[]|null;repeats:number}{
+  if(rank<.35)return {name:'hit',beats:null,repeats:1};
+  if(rank<.65)return {name:'double',beats:null,repeats:2};
+  if(rank<.85)return {name:'triple',beats:[0,step*2/3,step*4/3],repeats:3};
+  if(rank<.95)return {name:'quad',beats:null,repeats:4};
+  return {name:'ratchet',beats:[0,step,step*1.5,step*2,step*2.25,step*2.5],repeats:6};
+}
+/** Value of a sampled envelope near `time` (peak over the next 100 ms, so a note-on reads its attack). */
+export function envelopeAt(envelope:{intervalSeconds:number;values:number[]},time:number){
+  const first=Math.max(0,Math.floor(time/envelope.intervalSeconds)),last=Math.min(envelope.values.length-1,Math.ceil((time+.1)/envelope.intervalSeconds));
+  let peak=0;
+  for(let i=first;i<=last;i++)peak=Math.max(peak,envelope.values[i]);
+  return peak;
+}
 /** Groove feel for the nth trigger: fixed, or rotating straight/swing/dotted when varied. */
 export const grooveFeel=(groove:Groove|undefined,n:number):0|1|2=>groove==='swing'?1:groove==='dotted'?2:groove==='varied'?(n%3) as 0|1|2:0;
 export const patterns = ['midi-stems','cuts-only','audio-dense','audio-stutter4','mixed','straight','forward','backward','quarter','eighth','sixteenth','stutter2','stutter4','stutter8','dotted','swing','surprise','32nd','64th','speed-normal','speed-quarter','speed-third','speed-ramp','speed-smash'] as const;
@@ -121,28 +154,40 @@ export function buildMidiSchedule(grid:Grid,durations:number[],seed:number,secon
   return durations.map((duration,deck)=>{
     const stem=channels[deck%channels.length];
     const step=selected==='quarter'?1:selected==='eighth'?.5:selected==='sixteenth'?.25:stem.name==='synth'?.25:stem.name==='bass'?1:.5;
-    const repeats=selected==='stutter2'?2:selected==='stutter8'?8:4;
+    const fixedRepeats=selected==='stutter2'?2:selected==='stutter8'?8:4;
+    const density=Math.min(1,Math.max(0,grid.density??1)),dynamic=grid.repeatStyle==='dynamic';
+    const floor=densityFloor(stem.events.map(e=>e.strength),density);
+    const sorted=stem.events.map(e=>e.strength).sort((a,b)=>a-b);
+    // Lower density also leaves a rest after each burst so the clip plays through.
+    const restBeats=(1-density)*2;
     let state=(seed+deck*997)>>>0,blockedUntil=0,triggers=0;
     const events:Cut[]=[{id:0,at:0,source:deck*duration/durations.length,pattern:stem.name+'-preroll',stress:false,surprise:false,beat:0}];
     for(const note of stem.events){
       if(note.time>=seconds)break;
-      if(note.time<blockedUntil||note.strength<=0)continue;
+      if(note.time<blockedUntil||note.strength<=0||note.strength<floor)continue;
       state=(Math.imul(state,1664525)+1013904223)>>>0;
       const source=Math.floor(state/4294967296*8)*duration/8;
+      const shape=dynamic?burstShape(energyRank(sorted,note.strength),step):{name:'stutter'+fixedRepeats,beats:null,repeats:fixedRepeats};
+      const repeats=shape.repeats;
       const startBeat=beatAt(grid,note.time);
       const feel=grooveFeel(grid.groove,deck+triggers++);
       const feelName=feel?'-'+['straight','swing','dotted'][feel]:'';
       // Four plays of the same anchor, beginning exactly at the note-on; later
       // repeats land on the groove grid. Chords and notes inside a burst coalesce.
-      let beat=startBeat;
+      const label=stem.name+'-'+shape.name+'-'+(step===1?'quarter':step===.5?'eighth':'sixteenth')+(shape.beats?'':feelName)+(note.note===undefined?'':'-note'+note.note);
+      let beat=startBeat,lastAt=-Infinity;
       for(let repeat=0;repeat<repeats;repeat++){
-        const at=beatTime(grid,beat);
+        if(shape.beats)beat=startBeat+shape.beats[repeat];
+        // The first play is the note-on itself; beat round-trips are not bit-exact.
+        const at=repeat===0?note.time:beatTime(grid,beat);
         if(at>=seconds)break;
-        events.push({id:events.length,at,source,pattern:stem.name+'-stutter'+repeats+'-'+(step===1?'quarter':step===.5?'eighth':'sixteenth')+feelName+(note.note===undefined?'':'-note'+note.note),stress:false,surprise:false,beat,triggerTime:note.time});
+        // Shaped bursts drop any repeat closer than two 60 Hz frames to the last one.
+        if(!shape.beats||at-lastAt>=1/30-1e-9){events.push({id:events.length,at,source,pattern:label,stress:false,surprise:false,beat,triggerTime:note.time});lastAt=at;}
         // Grid-snapped repeats keep two 60 Hz frames of gap so no cut is shorter than a display frame.
-        beat=feel?nextGrooveBeat(Math.max(beat+1e-7,beatAt(grid,at+1/30)),step,feel):beat+step;
+        if(!shape.beats)beat=feel?nextGrooveBeat(Math.max(beat+1e-7,beatAt(grid,at+1/30)),step,feel):beat+step;
       }
-      blockedUntil=beatTime(grid,beat);
+      if(shape.beats)beat=startBeat+shape.beats.at(-1)!+step/2;
+      blockedUntil=beatTime(grid,beat+restBeats);
     }
     return events;
   });
@@ -167,4 +212,46 @@ function buildTriggeredRamps(grid:Grid,durations:number[],seed:number,seconds:nu
     }
     return events;
   });
+}
+
+/**
+ * Program (PGM) switches that never interrupt an effect: each switch goes to
+ * the deck whose burst is starting, and only once the burst on screen has
+ * finished. A burst is a deck's run of cuts sharing one trigger; it ends one
+ * repeat-interval after its last repeat, at a ramp's return to normal speed, or
+ * half a beat after a single hit. Returns [] when no cut carries a trigger.
+ */
+export function programTimeline(grid:Grid,schedules:Cut[][],minGapSeconds=.08):{at:number;deck:number}[]{
+  const bursts:{at:number;end:number;deck:number}[]=[];
+  schedules.forEach((events,deck)=>{
+    for(let i=0;i<events.length;i++){
+      const first=events[i];
+      if(first.triggerTime===undefined||first.at!==first.triggerTime)continue;
+      let last=i;
+      while(last+1<events.length&&events[last+1].triggerTime===first.triggerTime&&events[last+1].at!==events[last+1].triggerTime)last++;
+      const next=events[last+1];
+      const end=last>i?events[last].at+(events[last].at-events[last-1].at)
+        :next&&next.triggerTime===undefined?next.at
+        :first.at+(beatTime(grid,beatAt(grid,first.at)+.5)-first.at);
+      bursts.push({at:first.at,end,deck});
+      i=last;
+    }
+  });
+  bursts.sort((a,b)=>a.at-b.at||a.deck-b.deck);
+  const out:{at:number;deck:number}[]=[];
+  // Decks sharing a trigger channel start bursts together; give PGM to the one
+  // shown longest ago so every deck gets airtime.
+  const lastShown=schedules.map(()=>-Infinity);
+  let busyUntil=-Infinity;
+  for(let i=0;i<bursts.length;){
+    let j=i;
+    while(j<bursts.length&&bursts[j].at-bursts[i].at<1e-3)j++;
+    const tied=bursts.slice(i,j);i=j;
+    const b=tied.reduce((best,c)=>lastShown[c.deck]<lastShown[best.deck]?c:best);
+    if(b.at<busyUntil-1e-9||(out.length&&b.at-out.at(-1)!.at<minGapSeconds))continue;
+    out.push({at:b.at,deck:b.deck});
+    lastShown[b.deck]=b.at;
+    busyUntil=b.end;
+  }
+  return out;
 }

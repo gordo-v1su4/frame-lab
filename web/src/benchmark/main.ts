@@ -1,5 +1,5 @@
 import {hosted,saveBrowserResult} from "./result-storage";
-import { inspectLocalVideos, fingerprint, localAudioGrid } from "./local-media";
+import { inspectLocalVideos, fingerprint, localAudioGrid, MAX_LOCAL_DECKS } from "./local-media";
 import {
   buildSchedule,
   beatAt,
@@ -9,6 +9,8 @@ import {
   type Grid,
   type Pattern,
   type Cut,
+  envelopeAt,
+  programTimeline,
 } from "./schedule";
 import {
   makeAdapter,
@@ -28,6 +30,29 @@ const status = el("status"),
   reports = el("reports");
 const play = el<HTMLButtonElement>("play"),
   pause = el<HTMLButtonElement>("pause");
+const LEGACY_ONLY = " Only with Trigger source = Earlier pattern / audio tests.";
+/** Hover help for each pattern; shown on the option and on the closed select. */
+const patternHelp: Partial<Record<Pattern, string>> = {
+  "midi-stems": "Each trigger plays the same clip spot several times (4 by default, or by energy with Repeats). Vocals repeat on 1/8, synth on 1/16, bass on 1/4.",
+  "cuts-only": "No cuts inside the decks: each deck plays straight through from a different start. Only the program view switches.",
+  "audio-dense": "Cuts on every fairly strong mix onset (strength ≥ 0.45). Every 2nd cut starts a burst that rotates 2 / 4 / 8 repeats at 1/4, 1/8, 1/16." + LEGACY_ONLY,
+  "audio-stutter4": "Cuts only on the strongest mix onsets (strength ≥ 0.65). Every 4th cut starts a 4-repeat stutter on 1/8 or 1/16 notes." + LEGACY_ONLY,
+  mixed: "Rotates through 12 patterns, one per bar, with each deck at a different point in the cycle." + LEGACY_ONLY,
+  straight: "One continuous play, no cuts." + LEGACY_ONLY,
+  forward: "Steps forward through 8 slices of the clip on quarter notes." + LEGACY_ONLY,
+  backward: "Steps backward through 8 slices of the clip on quarter notes." + LEGACY_ONLY,
+  quarter: "Jumps to a random slice every quarter note." + LEGACY_ONLY + " With MIDI or analyzed triggers it sets the repeat step to 1/4.",
+  eighth: "Jumps to a random slice every 1/8 note." + LEGACY_ONLY + " With MIDI or analyzed triggers it sets the repeat step to 1/8.",
+  sixteenth: "Jumps to a random slice every 1/16 note." + LEGACY_ONLY + " With MIDI or analyzed triggers it sets the repeat step to 1/16.",
+  stutter2: "Repeats the same slice twice on 1/8 notes. With MIDI or analyzed triggers: 2 repeats per trigger.",
+  stutter4: "Repeats the same slice 4 times on 1/8 notes." + LEGACY_ONLY,
+  stutter8: "Repeats the same slice 8 times on 1/16 notes. With MIDI or analyzed triggers: 8 repeats per trigger.",
+  dotted: "Random slice jumps in a dotted-1/8 rhythm (long-short)." + LEGACY_ONLY,
+  swing: "Random slice jumps with a 2:1 swing feel." + LEGACY_ONLY,
+  surprise: "A random slice every 1/8 note, with no advance notice to the player: a seek stress test." + LEGACY_ONLY,
+  "32nd": "Stress test: random jumps every 1/32 note, faster than most displays can show." + LEGACY_ONLY,
+  "64th": "Stress test: random jumps every 1/64 note." + LEGACY_ONLY,
+};
 patterns
   .filter((p) => !p.startsWith("speed-"))
   .forEach((p) =>
@@ -42,6 +67,21 @@ patterns
       ),
     ),
   );
+for (const option of select("pattern").options)
+  option.title = patternHelp[option.value as Pattern] ?? "";
+select("repeats").options[0].title = "Every trigger plays the pattern's repeat count.";
+select("repeats").options[1].title =
+  "Loudness picks the repeat shape: quietest hits play once, then double, triplet, 4 repeats, and the loudest 5% ratchet (repeats speed up).";
+el("density").title =
+  "Keeps only the loudest share of each stem's triggers; the quietest go first. Lower density also adds a rest after each burst. Applies when you press Play.";
+const syncHelp = () => {
+  for (const id of ["pattern", "repeats", "trigger", "groove"])
+    select(id).title = select(id).selectedOptions[0]?.title || "";
+};
+document.addEventListener("change", (e) => {
+  if ((e.target as Element).tagName === "SELECT") syncHelp();
+});
+syncHelp();
 interface Manifest {
   clips: { id: number; variants: Record<string, Clip> }[];
   audio: { url: string; duration: number; sha256: string };
@@ -68,6 +108,8 @@ type AudioFeatures = {
   onsets: { time: number; strength: number }[];
   activity: { time: number; strength: number }[];
   loudness: { time: number; strength: number }[];
+  envelope?: { intervalSeconds: number; values: number[] };
+  bands?: Record<string, { time: number; strength: number }[]>;
 };
 let redlineAnalysis: Grid & {
     sourceSha256: string;
@@ -79,10 +121,8 @@ let interpolated: { clips: { id: number; variant: Clip }[] } | null = null;
 let lastPresentationSlot = -1,
   lastHudTime = -Infinity;
 const isRemap = () => select("mode").value === "remap";
-const usesRedline = () =>
-  !localAudio &&
-  (select("trigger").value !== "legacy" ||
-    select("pattern").value === "midi-stems");
+// Every included-media run uses Redline, so switching trigger source never swaps the song.
+const usesRedline = () => !localAudio;
 function modeControls() {
   const remap = isRemap();
   el("speed-readout").hidden = !remap;
@@ -90,6 +130,8 @@ function modeControls() {
   el("interpolation-control").hidden = !remap;
   select("pattern").parentElement!.hidden = remap;
   select("groove").parentElement!.hidden = remap;
+  el("repeats-control").hidden = remap;
+  el("density-control").hidden = remap;
   el("mode-note").textContent = remap
     ? "Independent speed ramps. Audio continues at normal speed."
     : "Choose what triggers each cut and how the video repeats.";
@@ -108,7 +150,8 @@ select("mode").onchange = () => {
   }
 };
 modeControls();
-let programTimes: number[] = [];
+let programTimes: number[] = [],
+  programDecks: number[] | null = null;
 let context: AudioContext,
   gain: GainNode,
   audio: AudioBufferSourceNode | null = null;
@@ -174,6 +217,8 @@ function controls(disabled: boolean) {
     "view",
     "budget",
     "groove",
+    "density",
+    "repeats",
     "mode",
     "trigger",
     "speed",
@@ -438,25 +483,44 @@ async function begin() {
         : originalGrid;
     if (usesRedline()) {
       const signal = select("trigger").value;
-      if (signal.startsWith("midi") || signal === "legacy")
+      if (signal === "legacy" && !midiDriven)
+        // Earlier seeded and onset patterns on Redline's beat grid and analyzed mix onsets.
+        baseGrid = {
+          ...midiEvents,
+          stems: undefined,
+          triggerChannels: undefined,
+          onsets: redlineAnalysis.features.mix.onsets,
+        };
+      else if (signal.startsWith("midi") || signal === "legacy")
         baseGrid = {
           ...midiEvents,
           triggerChannels: midiEvents.stems!
             .filter((stem) => !signal.startsWith("midi-") || signal === "midi-" + stem.name)
             .map((stem) => ({
             name: stem.name,
-            events: stem.notes.map((n) => ({
-              time: n.time,
-              strength: n.velocity / 127,
-              note: n.note,
-            })),
+            events: stem.notes.map((n) => {
+              const envelope = redlineAnalysis.features[stem.name]?.envelope;
+              // Velocity scaled by the stem's loudness at the note-on, so quiet passages rank lowest.
+              const energy = envelope ? 0.25 + 0.75 * Math.min(1, envelopeAt(envelope, n.time)) : 1;
+              return { time: n.time, strength: (n.velocity / 127) * energy, note: n.note };
+            }),
           })),
         };
-      else {
+      else if (signal.startsWith("fft-")) {
+        const bands = redlineAnalysis.features.mix.bands!;
+        const names = signal === "fft-bands" ? ["low", "mid", "high"] : [signal.slice(4)];
+        baseGrid = {
+          ...redlineAnalysis,
+          triggerChannels: names.map((name) => ({
+            name: "fft-" + name,
+            events: bands[name].filter((e) => e.strength >= 0.45),
+          })),
+        };
+      } else {
         const names =
           signal === "stem-onsets"
             ? ["vocals", "synth", "bass"]
-            : [signal.startsWith("vocals") ? "vocals" : "mix"];
+            : [signal.startsWith("vocals") ? "vocals" : signal.startsWith("drums") ? "drums" : "mix"];
         const feature = signal.endsWith("activity")
           ? "activity"
           : signal.endsWith("loudness")
@@ -484,6 +548,8 @@ async function begin() {
     const seed = Number(el<HTMLInputElement>("seed").value) >>> 0;
     grid.variedGroove = select("groove").value === "varied";
     grid.groove = select("groove").value as Grid["groove"];
+    grid.density = Number(el<HTMLInputElement>("density").value) / 100;
+    grid.repeatStyle = select("repeats").value as Grid["repeatStyle"];
     programTimes = audioDriven
       ? strongOnsets(grid, dense).map((o) => o.time)
       : grid.beats;
@@ -498,9 +564,17 @@ async function begin() {
       action,
     );
     if (grid.triggerChannels) {
-      const times = grid.triggerChannels
-        .flatMap((channel) => channel.events.map((e) => e.time))
-        .sort((a, b) => a - b);
+      // Program switches follow triggers the decks actually cut on, so density
+      // thinning reaches the program view; raw triggers only for schedules
+      // that do not tag trigger starts (cuts-only).
+      const accepted = schedules.flatMap((events) =>
+        events.filter((e) => e.triggerTime === e.at).map((e) => e.at),
+      );
+      const times = (
+        accepted.length
+          ? accepted
+          : grid.triggerChannels.flatMap((channel) => channel.events.map((e) => e.time))
+      ).sort((a, b) => a - b);
       programTimes = [];
       for (const time of times)
         if (
@@ -521,6 +595,13 @@ async function begin() {
         (t, i) => i === 0 || t - times[i - 1] >= 0.08,
       );
     }
+    // PGM never cuts into or out of a running effect: follow the triggering
+    // deck once the burst on screen ends. Seeded bar patterns switch on bars.
+    const timeline = programTimeline(grid, schedules);
+    programDecks = timeline.length ? timeline.map((t) => t.deck) : null;
+    if (timeline.length) programTimes = timeline.map((t) => t.at);
+    else if (!audioDriven && !grid.triggerChannels)
+      programTimes = grid.beats.filter((_, i) => i % 4 === 0);
     scores = clips.map(
       (c, i) => new FrameScore(schedules[i], c.duration, c.fps),
     );
@@ -688,14 +769,18 @@ async function begin() {
       : "original";
     if (usesRedline()) {
       settings.audioHash = midiEvents.sourceSha256;
-      settings.gridHash =
-        select("trigger").value.startsWith("midi") ? midiHash : redlineHash;
+      const midiGrid =
+        select("trigger").value.startsWith("midi") ||
+        (select("trigger").value === "legacy" && !audioDriven);
+      settings.gridHash = midiGrid ? midiHash : redlineHash;
       settings.gridProvenance =
-        select("trigger").value.startsWith("midi")
+        midiGrid
           ? midiEvents.analysis
           : redlineAnalysis.analysis;
       settings.triggerSource = select("trigger").selectedOptions[0].textContent;
       settings.signal = select("trigger").value;
+      settings.density = grid.density;
+      settings.repeatStyle = grid.repeatStyle;
       settings.programRefractorySeconds = 0.08;
     }
     if (localAudio) {
@@ -769,7 +854,7 @@ function tick(now: number) {
         ? 0
         : view.startsWith("deck-")
           ? Math.min(clips.length - 1, Number(view.slice(5)) - 1)
-          : beatIndex % clips.length;
+          : (programDecks?.[beatIndex] ?? beatIndex % clips.length);
   if (isRemap()) {
     const visible = targetAt(schedules[pgm], time, clips[pgm].duration);
     el("speed-text").textContent =
@@ -1040,7 +1125,7 @@ const ready = init().catch((e) => {
 
 function mediaStatus() {
   el("local-media-status").textContent = localClips.length || localAudio
-    ? `${localClips.length ? localClips.length + " local videos" : "Demo videos"} · ${localAudio ? "local audio" : "Redline audio"}. Media stays in this page session; never uploaded.`
+    ? `${localClips.length ? localClips.length + (localClips.length === 1 ? " local video" : " local videos") : "Demo videos"} · ${localAudio ? "local audio" : "Redline audio"}. Media stays in this page session; never uploaded.`
     : "Demo media ready: 8 Beatsmaxxer clips (720p and 1080p) with the Redline track, MIDI and Essentia analysis, served from prep/fixtures/test-media/benchmark. Choose files to test your own.";
   el("local-bpm-label").hidden = !localAudio;
   select("trigger").disabled = !!localAudio;
@@ -1053,9 +1138,8 @@ el<HTMLInputElement>("local-videos").onchange = async () => {
   try {
     status.textContent = "Inspecting local files…";
     play.disabled = true;
-    const clips = await inspectLocalVideos(
-      Array.from(el<HTMLInputElement>("local-videos").files ?? []),
-    );
+    const chosen = Array.from(el<HTMLInputElement>("local-videos").files ?? []);
+    const clips = await inspectLocalVideos(chosen);
     if (ticket !== runId) {
       clips.forEach((c) => URL.revokeObjectURL(c.url));
       return;
@@ -1068,8 +1152,16 @@ el<HTMLInputElement>("local-videos").onchange = async () => {
     select("count").value = value;
     select("interpolation").value = "original";
     mediaStatus();
-    status.textContent = "Local videos ready.";
+    status.textContent =
+      chosen.length > MAX_LOCAL_DECKS
+        ? `${chosen.length} videos chosen · using the first ${MAX_LOCAL_DECKS} (one per deck, eight decks max).`
+        : "Local videos ready.";
   } catch (e) {
+    // Drop any earlier selection so the status never describes stale clips.
+    localClips.forEach((c) => URL.revokeObjectURL(c.url));
+    localClips = [];
+    el<HTMLInputElement>("local-videos").value = "";
+    mediaStatus();
     status.textContent = String(e);
   } finally {
     if (ticket === runId) {
@@ -1148,7 +1240,7 @@ window.addEventListener('benchmark-reload', async event => {
   };
   set('backend',report.backend);set('mode',report.mode??'cuts');set('count',report.count,true);set('duration',report.duration??report.elapsed,true);
   set('resolution',report.resolution);set('trigger',report.signal??(report.pattern==='midi-stems'?'midi':'legacy'));set('pattern',report.pattern);
-  set('speed',report.action);set('view',report.programView??'switch');set('groove',report.groove??'straight');set('interpolation',report.interpolation??'original');
+  set('speed',report.action);set('view',report.programView??'switch');set('groove',report.groove??'straight');set('repeats',report.repeatStyle??'fixed');el<HTMLInputElement>('density').value=String(Math.round((report.density??1)*100));set('interpolation',report.interpolation??'original');
   if(report.cacheBudgetBytes)set('budget',report.cacheBudgetBytes/2**20,true);
   el<HTMLInputElement>('seed').value=String(report.seed??42);
   const bpm=/local-energy-v1-bpm-(.+)/.exec(report.gridHash??'');if(bpm)el<HTMLInputElement>('local-bpm').value=bpm[1];
@@ -1211,12 +1303,65 @@ async function recordRun(name: string) {
   await fetch(`/captures/${name}.${extension}`, { method: "POST", body: new Blob(chunks, { type: mime }) });
   captureState.saved = true;
 }
+/** Run settings a preset or URL can carry; local media files are never stored. */
+const PRESET_FIELDS = ["mode", "backend", "count", "duration", "resolution", "budget", "trigger", "pattern", "speed", "view", "groove", "density", "repeats", "interpolation", "seed", "volume"];
+const PRESET_KEY = "frame-lab-presets";
+const readPresets = (): Record<string, Record<string, string>> => {
+  try { return JSON.parse(localStorage.getItem(PRESET_KEY) ?? "{}"); } catch { return {}; }
+};
+const writePresets = (presets: Record<string, Record<string, string>>) => {
+  try { localStorage.setItem(PRESET_KEY, JSON.stringify(presets)); } catch { status.textContent = "Presets could not be saved in this browser."; }
+};
+function renderPresets(selected = "") {
+  const list = select("preset");
+  list.replaceChildren(new Option("Presets…", ""));
+  for (const name of Object.keys(readPresets()).sort()) list.add(new Option(name, name));
+  list.value = selected;
+  el<HTMLButtonElement>("preset-delete").disabled = !selected;
+}
+select("preset").onchange = () => {
+  const name = select("preset").value, preset = readPresets()[name];
+  el<HTMLButtonElement>("preset-delete").disabled = !name;
+  if (!preset || playing || busy) return;
+  for (const id of PRESET_FIELDS) {
+    const control = document.getElementById(id) as HTMLSelectElement | HTMLInputElement | null;
+    if (!control || preset[id] === undefined) continue;
+    if (control instanceof HTMLSelectElement && ![...control.options].some((o) => o.value === preset[id])) continue;
+    control.value = preset[id];
+  }
+  modeControls();
+  if (gain) gain.gain.value = Number(el<HTMLInputElement>("volume").value);
+  status.textContent = `Preset "${name}" loaded. Press Play.`;
+};
+el("preset-save").onclick = () => {
+  const name = prompt("Preset name", select("preset").value || "")?.trim();
+  if (!name) return;
+  const presets = readPresets();
+  presets[name] = Object.fromEntries(
+    PRESET_FIELDS.flatMap((id) => {
+      const control = document.getElementById(id) as HTMLInputElement | null;
+      return control ? [[id, control.value]] : [];
+    }),
+  );
+  writePresets(presets);
+  renderPresets(name);
+  status.textContent = `Preset "${name}" saved in this browser.`;
+};
+el("preset-delete").onclick = () => {
+  const name = select("preset").value;
+  if (!name || !confirm(`Delete preset "${name}"?`)) return;
+  const presets = readPresets();
+  delete presets[name];
+  writePresets(presets);
+  renderPresets();
+};
+renderPresets();
 {
   const params = new URLSearchParams(location.search);
   if (params.has("capture")) document.body.classList.add("capture");
   if (params.size) {
     void ready.then(() => {
-      for (const id of ["mode", "backend", "count", "duration", "resolution", "budget", "trigger", "pattern", "speed", "view", "groove", "interpolation", "seed", "volume"]) {
+      for (const id of PRESET_FIELDS) {
         const value = params.get(id);
         if (value === null) continue;
         const control = document.getElementById(id) as HTMLSelectElement | HTMLInputElement | null;

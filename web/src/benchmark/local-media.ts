@@ -5,9 +5,11 @@ export const fingerprint = async (bytes: ArrayBuffer) =>
   Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+/** The deck preview grid holds eight tiles; extra selected files are ignored. */
+export const MAX_LOCAL_DECKS = 8;
 export async function inspectLocalVideos(files: File[]): Promise<Clip[]> {
-  if (!files.length || files.length > 8)
-    throw Error("Choose between one and eight MP4 videos.");
+  if (!files.length) throw Error("Choose at least one MP4 video.");
+  files = files.slice(0, MAX_LOCAL_DECKS);
   const clips: Clip[] = [];
   try {
     for (const file of files) {

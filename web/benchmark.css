@@ -1094,3 +1094,19 @@ input[type="range"]:hover::-webkit-slider-thumb, input[type="range"]:focus-visib
 body.capture #screen { height:calc(100vh - 128px); max-height:none; width:auto; }
 
 .filters label.check-label { display:flex !important; flex-direction:row !important; align-items:center; gap:6px; }
+
+/* Dropdowns: customizable select (Chromium 135+) in the neutral palette instead of the OS blue highlight. */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  select::picker-icon { color:var(--neutral-400); font-size:9px; }
+  select:open::picker-icon { color:var(--neutral-100); }
+  ::picker(select) { background:var(--neutral-900); color:var(--neutral-100); border:1px solid var(--neutral-700); border-radius:4px; padding:3px; box-shadow:0 8px 24px #000a; }
+  option { padding:5px 8px; border-radius:3px; font-size:11px; color:var(--neutral-300); background:transparent; }
+  option:hover, option:focus-visible { background:var(--neutral-800); color:var(--neutral-100); outline:none; }
+  option:checked { background:var(--neutral-700); color:#fff; font-weight:600; }
+  option::checkmark { color:var(--neutral-400); font-size:9px; }
+}
+/* Fallback for browsers without base-select: keep the checked option gray. */
+option:checked { background:var(--neutral-700); color:#fff; }
+.preset-bar { display:grid; grid-template-columns:1fr auto auto; gap:6px; margin:0 0 12px; }
