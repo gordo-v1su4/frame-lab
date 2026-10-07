@@ -82,3 +82,11 @@ test('triggered ramps differ across decks while preserving source position at ev
     expect(targetAt(events.slice(0,i),events[i].at,20).source).toBeCloseTo(events[i].source,6);
   }
 });
+test('swing and dotted repeats never schedule a cut shorter than a display frame',()=>{
+  // Notes land just before groove grid lines, where naive snapping would follow within milliseconds.
+  const events=Array.from({length:40},(_,i)=>({time:i*0.5-0.01+(i%3)*0.003,strength:1}));
+  for(const groove of ['swing','dotted','varied'] as const){
+    const cuts=buildSchedule({...grid,groove,triggerChannels:[{name:'synth',events}]},[20],42,20,'midi-stems')[0];
+    for(let i=1;i<cuts.length;i++)expect(cuts[i].at-cuts[i-1].at).toBeGreaterThanOrEqual(1/30-1e-9);
+  }
+});

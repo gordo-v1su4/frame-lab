@@ -25,6 +25,7 @@ Earlier compiled-core decisions, original demo instructions and dated measuremen
 - [Triage Labels](agents/triage-labels.md)
 - [Beatmaxxer follow-up — September 13, 2026](beatmaxxer-follow-up.md)
 - [Playback and WebAssembly research roadmap](evaluation-roadmap.md)
+- [Multi-video technique scan, October 2026](multi-video-techniques-2026-10.md)
 - [Standalone Frame Lab implementation plan](frame-lab-plan.md)
 - [Frame Lab standalone validation](frame-lab-validation.md)
 - [Musical multi-deck comparison](musical-playback-benchmark.md)

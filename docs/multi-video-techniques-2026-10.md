@@ -48,3 +48,39 @@ None of them publishes many-stream realtime numbers. Frame Lab's single-device, 
 - MediaStreamTrackProcessor in workers: https://blog.mozilla.org/webrtc/unbundling-mediastreamtrackprocessor-and-videotrackgenerator/
 - CapCut case study: https://web.dev/case-studies/capcut
 - Basis Universal: https://github.com/BinomialLLC/basis_universal
+
+## Local reference editors (MasterSelects, freecut)
+
+Both repos were pulled to latest on 2026-10-07 and studied for their decode and present paths. Neither does live multi-deck playback, but both have pieces worth porting.
+
+- **MasterSelects:**
+  - Zero-copy `importExternalTexture` for both `<video>` and `VideoFrame`, with a guard against closed frames.
+  - On each new frame (rVFC), wraps the `<video>` as `new VideoFrame(video, {timestamp: mediaTime})`.
+  - Decoder pool capped at 8, recycled least-recently-used, with a keyframe re-prime after each reuse.
+  - Resident `texture_2d_array` frame history with a MiB budget.
+  - JPEG all-intra proxies.
+  - Worker OffscreenCanvas render host (off by default).
+  - Requests `timestamp-query`, `shader-f16` and `subgroups`, with a WebGPU compatibility-mode fallback.
+  - A GPU **BC1/BC3 block encoder** (HAP), currently used only for export.
+- **freecut:**
+  - mediabunny `samplesAtTimestamps` batch decode, where each packet is decoded at most once, in a 3–6 worker pool.
+  - A 3-tier scrub cache: VRAM, then last frame, then RAM ImageBitmaps.
+  - 960×540 proxies with a 2 s GOP.
+  - Plain WebGPU device with external textures.
+
+Ideas carried into Linear:
+- **V1S-200**: compressed (BC1) and YUV-planar resident banks.
+- **V1S-201**: WebCodecs zero-copy import and pre-scheduled `samplesAtTimestamps`.
+- **V1S-202**: timestamp-query and compatibility mode.
+
+## WebAssembly (2025–26)
+
+- **JSPI (JavaScript Promise Integration)** is the WebAssembly feature that started working in all three browser engines during 2026 (Chrome 137, Firefox 153, Safari 27). It lets WASM call async browser APIs such as WebCodecs as if they were blocking, which simplifies the code but does not make it faster.
+- **Wasm 3.0** (GC, memory64, multiple memories, exception handling, tail calls) was finalized in September 2025. Little of it applies here.
+- **wasi-gfx (WASI WebGPU)** runs outside browsers only.
+- There is no zero-copy path between WASM memory and the GPU. `VideoFrame.copyTo` into WASM memory is a full copy, often with a readback from the GPU.
+
+WASM will not beat hardware decode at 720p. Where it could help:
+- a jitter-free edit scheduler in a worker using shared memory (**V1S-203**)
+- custom intra-only codecs for very short loops
+- encoding compressed textures at load time (a GPU compute encoder is the better fit)

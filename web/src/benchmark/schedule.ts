@@ -139,7 +139,8 @@ export function buildMidiSchedule(grid:Grid,durations:number[],seed:number,secon
         const at=beatTime(grid,beat);
         if(at>=seconds)break;
         events.push({id:events.length,at,source,pattern:stem.name+'-stutter'+repeats+'-'+(step===1?'quarter':step===.5?'eighth':'sixteenth')+feelName+(note.note===undefined?'':'-note'+note.note),stress:false,surprise:false,beat,triggerTime:note.time});
-        beat=feel?nextGrooveBeat(beat+1e-7,step,feel):beat+step;
+        // Grid-snapped repeats keep two 60 Hz frames of gap so no cut is shorter than a display frame.
+        beat=feel?nextGrooveBeat(Math.max(beat+1e-7,beatAt(grid,at+1/30)),step,feel):beat+step;
       }
       blockedUntil=beatTime(grid,beat);
     }

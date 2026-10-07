@@ -28,6 +28,10 @@ const scenarios: Scenario[] = [
     params: { ...cuts, trigger, groove: "straight" },
   })),
   ...["swing", "dotted", "varied"].map((groove) => ({ name: `gpu-bank-8-midi-${groove}`, params: { ...cuts, trigger: "midi", groove } })),
+  // FFT (spectral-flux) onset triggers under swung and dotted repeats.
+  ...["mix-onsets", "vocals-onsets"].flatMap((trigger) =>
+    ["swing", "dotted"].map((groove) => ({ name: `gpu-bank-8-${trigger}-${groove}`, params: { ...cuts, trigger, groove } })),
+  ),
   { name: "gpu-bank-8-speed-ramp", params: { ...cuts, mode: "remap", speed: "speed-ramp", trigger: "midi", budget: 24576, interpolation: "original" } },
   { name: "webcodecs-8-midi-straight", params: { ...cuts, backend: "mediabunny", budget: 256, trigger: "midi", groove: "straight" } },
   { name: "html-pool-8-midi-straight", params: { ...cuts, backend: "beatsmaxxer", trigger: "midi", groove: "straight" } },
