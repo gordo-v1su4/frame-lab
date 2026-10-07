@@ -1,4 +1,5 @@
 /* All benchmark tabs share the Results page's header and content boundaries. */
+html { scrollbar-gutter: stable; }
 body:not(.capture).lab-view { overflow: auto; }
 body:not(.capture).lab-view .shell {
   display: block;
