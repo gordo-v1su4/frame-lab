@@ -24,3 +24,6 @@ dist/
 .vercel/
 .vercel
 .env*
+
+# Cursor hook runtime state (per-machine)
+.cursor/hooks/state/
