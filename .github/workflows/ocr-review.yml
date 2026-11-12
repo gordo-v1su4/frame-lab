@@ -55,7 +55,7 @@ jobs:
             core.setOutput('head_sha', pr.head.sha);
             core.setOutput('pr_number', String(number));
 
-      - name: Review with Qwen 3.8 Flash
+      - name: Review with Prism Flash
         id: primary
         continue-on-error: true
         uses: alibaba/open-code-review@a758d9cbfb689937c7857ad64b2dd66adb58c0c2
@@ -63,7 +63,7 @@ jobs:
           ocr_version: '1.12.11'
           llm_url: https://hyper.charm.land/v1
           llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
-          llm_model: qwen3.8-flash
+          llm_model: prism-flash
           llm_use_anthropic: 'false'
           llm_protocol: openai
           llm_extra_body: '{"thinking":{"type":"enabled"}}'
@@ -74,14 +74,14 @@ jobs:
           head_sha: ${{ steps.context.outputs.head_sha }}
           pr_number: ${{ steps.context.outputs.pr_number }}
 
-      - name: Retry with GLM 5.3 Flash
+      - name: Retry with Prism Flash
         if: ${{ !cancelled() && steps.primary.outcome == 'failure' }}
         uses: alibaba/open-code-review@a758d9cbfb689937c7857ad64b2dd66adb58c0c2
         with:
           ocr_version: '1.12.11'
           llm_url: https://hyper.charm.land/v1
           llm_auth_token: ${{ secrets.OCR_LLM_AUTH_TOKEN }}
-          llm_model: glm-5.3-flash
+          llm_model: prism-flash
           llm_use_anthropic: 'false'
           llm_protocol: openai
           llm_extra_body: '{"thinking":{"type":"enabled"}}'
